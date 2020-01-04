@@ -30,13 +30,15 @@ from onionshare.web import Web
 
 from ..file_selection import FileSelection
 from .. import Mode
-from ..history import History, ToggleHistory, VisitHistoryItem
+from ..history import History, ToggleHistory
 from ...widgets import Alert
+
 
 class WebsiteMode(Mode):
     """
     Parts of the main window UI for sharing files.
     """
+
     success = QtCore.pyqtSignal()
     error = QtCore.pyqtSignal(str)
 
@@ -45,7 +47,7 @@ class WebsiteMode(Mode):
         Custom initialization for ReceiveMode.
         """
         # Create the Web object
-        self.web = Web(self.common, True, 'website')
+        self.web = Web(self.common, True, "website")
 
         # File selection
         self.file_selection = FileSelection(self.common, self)
@@ -54,7 +56,7 @@ class WebsiteMode(Mode):
                 self.file_selection.file_list.add_file(filename)
 
         # Server status
-        self.server_status.set_mode('website', self.file_selection)
+        self.server_status.set_mode("website", self.file_selection)
         self.server_status.server_started.connect(self.file_selection.server_started)
         self.server_status.server_stopped.connect(self.file_selection.server_stopped)
         self.server_status.server_stopped.connect(self.update_primary_action)
@@ -69,17 +71,23 @@ class WebsiteMode(Mode):
         # Filesize warning
         self.filesize_warning = QtWidgets.QLabel()
         self.filesize_warning.setWordWrap(True)
-        self.filesize_warning.setStyleSheet(self.common.css['share_filesize_warning'])
+        self.filesize_warning.setStyleSheet(self.common.css["share_filesize_warning"])
         self.filesize_warning.hide()
 
         # Download history
         self.history = History(
             self.common,
-            QtGui.QPixmap.fromImage(QtGui.QImage(self.common.get_resource_path('images/share_icon_transparent.png'))),
-            strings._('gui_website_mode_no_files'),
-            strings._('gui_all_modes_history'),
-            'website'
+            QtGui.QPixmap.fromImage(
+                QtGui.QImage(
+                    self.common.get_resource_path("images/share_icon_transparent.png")
+                )
+            ),
+            strings._("gui_website_mode_no_files"),
+            strings._("gui_all_modes_history"),
+            "website",
         )
+        self.history.in_progress_label.hide()
+        self.history.completed_label.hide()
         self.history.hide()
 
         # Info label
@@ -88,9 +96,13 @@ class WebsiteMode(Mode):
 
         # Toggle history
         self.toggle_history = ToggleHistory(
-            self.common, self, self.history,
-            QtGui.QIcon(self.common.get_resource_path('images/share_icon_toggle.png')),
-            QtGui.QIcon(self.common.get_resource_path('images/share_icon_toggle_selected.png'))
+            self.common,
+            self,
+            self.history,
+            QtGui.QIcon(self.common.get_resource_path("images/share_icon_toggle.png")),
+            QtGui.QIcon(
+                self.common.get_resource_path("images/share_icon_toggle_selected.png")
+            ),
         )
 
         # Top bar
@@ -124,7 +136,7 @@ class WebsiteMode(Mode):
         """
         Return the string to put on the stop server button, if there's an auto-stop timer
         """
-        return strings._('gui_share_stop_server_autostop_timer')
+        return strings._("gui_share_stop_server_autostop_timer")
 
     def autostop_timer_finished_should_stop_server(self):
         """
@@ -132,9 +144,8 @@ class WebsiteMode(Mode):
         """
 
         self.server_status.stop_server()
-        self.server_status_label.setText(strings._('close_on_autostop_timer'))
+        self.server_status_label.setText(strings._("close_on_autostop_timer"))
         return True
-
 
     def start_server_custom(self):
         """
@@ -142,7 +153,7 @@ class WebsiteMode(Mode):
         """
         # Reset web counters
         self.web.website_mode.visit_count = 0
-        self.web.error404_count = 0
+        self.web.reset_invalid_passwords()
 
         # Hide and reset the downloads if we have previously shared
         self.reset_info_counters()
@@ -159,18 +170,13 @@ class WebsiteMode(Mode):
         self.starting_server_step3.emit()
         self.start_server_finished.emit()
 
-
     def start_server_step3_custom(self):
         """
         Step 3 in starting the server. Display large filesize
         warning, if applicable.
         """
-
-        if self.web.website_mode.set_file_info(self.filenames):
-            self.success.emit()
-        else:
-            # Cancelled
-            pass
+        self.web.website_mode.set_file_info(self.filenames)
+        self.success.emit()
 
     def start_server_error_custom(self):
         """
@@ -193,35 +199,13 @@ class WebsiteMode(Mode):
         """
         Log that the server has been cancelled
         """
-        self.common.log('WebsiteMode', 'cancel_server')
-
+        self.common.log("WebsiteMode", "cancel_server")
 
     def handle_tor_broke_custom(self):
         """
         Connection to Tor broke.
         """
         self.primary_action.hide()
-
-    def handle_request_load(self, event):
-        """
-        Handle REQUEST_LOAD event.
-        """
-        self.system_tray.showMessage(strings._('systray_site_loaded_title'), strings._('systray_site_loaded_message'))
-
-    def handle_request_started(self, event):
-        """
-        Handle REQUEST_STARTED event.
-        """
-        if ( (event["path"] == '') or (event["path"].find(".htm") != -1 ) ):
-            item = VisitHistoryItem(self.common, event["data"]["id"], 0)
-
-            self.history.add(event["data"]["id"], item)
-            self.toggle_history.update_indicator(True)
-            self.history.completed_count += 1
-            self.history.update_completed()
-
-        self.system_tray.showMessage(strings._('systray_website_started_title'), strings._('systray_website_started_message'))
-
 
     def on_reload_settings(self):
         """
@@ -233,7 +217,7 @@ class WebsiteMode(Mode):
             self.info_label.show()
 
     def update_primary_action(self):
-        self.common.log('WebsiteMode', 'update_primary_action')
+        self.common.log("WebsiteMode", "update_primary_action")
 
         # Show or hide primary action layout
         file_count = self.file_selection.file_list.count()
@@ -249,9 +233,15 @@ class WebsiteMode(Mode):
             total_size_readable = self.common.human_readable_filesize(total_size_bytes)
 
             if file_count > 1:
-                self.info_label.setText(strings._('gui_file_info').format(file_count, total_size_readable))
+                self.info_label.setText(
+                    strings._("gui_file_info").format(file_count, total_size_readable)
+                )
             else:
-                self.info_label.setText(strings._('gui_file_info_single').format(file_count, total_size_readable))
+                self.info_label.setText(
+                    strings._("gui_file_info_single").format(
+                        file_count, total_size_readable
+                    )
+                )
 
         else:
             self.primary_action.hide()
@@ -262,6 +252,8 @@ class WebsiteMode(Mode):
         Set the info counters back to zero.
         """
         self.history.reset()
+        self.toggle_history.indicator_count = 0
+        self.toggle_history.update_indicator()
 
     @staticmethod
     def _compute_total_size(filenames):
